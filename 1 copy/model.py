@@ -1,0 +1,68 @@
+# model.py (improved version)
+import torch
+import torch.nn as nn
+from torch_geometric.nn import GCNConv
+from einops import rearrange
+import math
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=28):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.pe = pe.unsqueeze(0)
+
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1), :].to(x.device)
+
+class SparseGCNBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.gcn = GCNConv(in_channels, out_channels)
+        self.norm = nn.LayerNorm(out_channels)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, edge_index):
+        x = self.gcn(x, edge_index)
+        x = self.norm(x)
+        return self.relu(x)
+
+class AttentionRoutingTransformer(nn.Module):
+    def __init__(self, d_model=128, nhead=4, num_layers=2):
+        super().__init__()
+        encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward=256, dropout=0.1, batch_first=True)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers)
+        self.norm = nn.LayerNorm(d_model)
+        self.pos_enc = PositionalEncoding(d_model)
+
+    def forward(self, x):
+        x = self.pos_enc(x)
+        x = self.encoder(x)
+        return self.norm(x)
+
+class PoseEstimator(nn.Module):
+    def __init__(self, in_channels=2, hidden_dim=128, out_dim=3):
+        super().__init__()
+        self.gcn1 = SparseGCNBlock(in_channels, hidden_dim)
+        self.gcn2 = SparseGCNBlock(hidden_dim, hidden_dim)
+        self.trans = AttentionRoutingTransformer(d_model=hidden_dim)
+        self.dropout = nn.Dropout(0.2)
+        self.head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, out_dim)
+        )
+
+    def forward(self, x, edge_index):
+        B, J, C = x.shape
+        x = x.view(-1, C)
+        edge_index = edge_index.repeat(B, 1, 1).view(2, -1)
+        x = self.gcn1(x, edge_index)
+        x = self.gcn2(x, edge_index)
+        x = x.view(B, J, -1)
+        x = self.trans(x)
+        x = self.dropout(x)
+        return self.head(x)
