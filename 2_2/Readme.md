@@ -1,94 +1,125 @@
-# 📘 3D Human Pose Estimation with Sparse GCN + Attention Routing
+# 📘 Sparse GCN + Transformer for Real-Time 3D Human Pose Estimation
 
-## 🧠 Project Overview
-This project demonstrates a real-time **3D human pose detection** system using a **hybrid Sparse Graph Convolution + Transformer model**. It is optimized for:
-- ✅ Real-time speed
-- ✅ High accuracy
-- ✅ Novel attention-based architecture for routing joint relevance dynamically
-
-> 🏆 Inspired by cutting-edge research like MotionAGFormer and PoseFormer, but introducing **sparse dynamic graph learning and joint-specific attention**.
+This project implements a **hybrid Sparse Graph Convolution + Attention Transformer model** to estimate **3D human poses** from 2D keypoints extracted via MediaPipe. It's lightweight, modular, and optimized for real-time inference.
 
 ---
 
-## 📐 Architecture
+## ✅ Features
+- Sparse edge graph modeling of joints
+- Joint-specific attention routing via Transformers
+- End-to-end 2D to 3D pipeline
+- Real-time inference on webcam or static images
+- Device-agnostic (CPU/GPU)
+
+---
+
+## 🧠 Architecture
 ```
-Input: Webcam Frame → 2D Keypoints (MediaPipe)
-   ↓
-Sparse Graph Convolution (learns dynamic joint connectivity)
-   ↓
-Attention Routing Transformer (focuses only on relevant joints)
-   ↓
-MLP → 3D Joint Position Estimation
-   ↓
-Real-time 3D Skeleton Overlay (on camera frame)
+[Image] --> [MediaPipe 2D Keypoints] --> [Sparse GCN] --> [Transformer] --> [MLP Head] --> [3D Pose]
 ```
 
 ---
 
-## 📦 Components
-- `model.py`: Defines `SparseGCNLayer`, `AttentionRoutingTransformer`, and `PoseEstimator`
-- `predict_live.py`: Real-time webcam inference with MediaPipe keypoints
-- `visualize.py`: Projects and renders 3D pose on the frame
-- `train_pose_model.py`: Trains the model on `mpi_inf_combined.npz`
-- `extract_mpi_inf_3dhp.py`: Converts `.mat` MPI-INF-3DHP data to `.npz` format
-
----
-
-## 🖥️ Live Demo (Run This)
-```bash
-python predict_live.py
+## 📁 Directory Structure
 ```
-- Requires a webcam
-- Press `Esc` to exit
-
----
-
-## 🏋️‍♂️ Training
-Train your own model using:
-```bash
-python train_pose_model.py
+.
+├── model.py                # Model architecture (GCN + Transformer)
+├── train_pose_model.py     # Training script
+├── predict_image_3dplot.py # Inference on single image
+├── mpi_inf_combined.npz    # Preprocessed MPI-INF-3DHP dataset
+├── pose2d_mean_std.npy     # Saved 2D normalization stats
+├── input.jpeg              # Test input image
+├── output_3d.png           # Saved output plot
+└── README.md               # This file
 ```
-Ensure `mpi_inf_combined.npz` is present in the working directory.
-
----
-
-## 📂 Dataset
-- Source: [MPI-INF-3DHP](http://vcai.mpi-inf.mpg.de/3dhp-dataset/)
-- Converted to NumPy `.npz` using `extract_mpi_inf_3dhp.py`
-- Format:
-  - `pose2d`: (N, 28, 2)
-  - `pose3d`: (N, 28, 3)
 
 ---
 
 ## ⚙️ Setup Instructions
 
-### 🧪 Requirements
+### 🔹 1. Create Conda Environment
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+conda create -n sparse_pose_env python=3.10 -y
+conda activate sparse_pose_env
+```
+
+### 🔹 2. Install PyTorch (CUDA 12.1)
+```bash
+pip install torch==2.1.0+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+### 🔹 3. Install PyTorch Geometric + Dependencies
+```bash
+pip install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.1.0+cu121.html
 pip install torch-geometric
+```
+
+### 🔹 4. Install Remaining Requirements
+```bash
 pip install mediapipe opencv-python matplotlib einops tqdm
 ```
 
-### 🧠 GPU
-Ensure your system has **CUDA 12.8** and an NVIDIA GPU enabled.
+---
+
+## 🏋️‍♂️ Training
+
+Ensure your dataset file `mpi_inf_combined.npz` is in the root directory.
+
+```bash
+python train_pose_model.py
+```
+This will:
+- Train for 10 epochs
+- Save model weights to `model_weights.pth`
+- Save normalization stats to `pose2d_mean_std.npy`
 
 ---
 
-## 📊 Evaluation (Coming Soon)
-Add MPJPE, P-MPJPE, and acceleration metrics to validate accuracy.
+## 🖼️ Predict on Image
+
+Place your input image as `input.jpeg` (or change the filename in script) and run:
+
+```bash
+python predict_image_3dplot.py
+```
+This will:
+- Run MediaPipe to extract 2D keypoints
+- Normalize using training dataset mean/std
+- Predict 3D pose
+- Plot and save the result as `output_3d.png`
 
 ---
 
-## 🔬 Research Highlights
-- 🔄 Uses sparse edge index (not full graphs)
-- 🧠 Each joint attends only to relevant joints (routing attention)
-- 🪶 Lightweight GCN + Transformer stack, real-time ready
-- 🎯 Highly modular and explainable design
+## 📦 Module Versions
+| Library         | Version         |
+|----------------|------------------|
+| Python          | 3.10.x           |
+| torch           | 2.1.0+cu121      |
+| torchvision     | 0.16.0+cu121     |
+| torch-geometric | 2.4.0            |
+| torch-scatter   | 2.1.2+pt21cu121  |
+| torch-sparse    | 0.6.18+pt21cu121 |
+| mediapipe       | 0.10.9           |
+| opencv-python   | 4.9.0.80         |
+| matplotlib      | 3.8.4            |
+| einops          | 0.7.0            |
+| tqdm            | 4.66.2           |
 
 ---
 
-## ✍️ Citation (if used)
+## ✍️ Citation
 ```
 Vedansh Tembhre, 2025. "Hybrid Sparse Graph and Transformer Architecture for Real-Time 3D Human Pose Estimation."
 ```
+
+---
+
+## 🔧 Future Enhancements
+- MPJPE & P-MPJPE evaluation metrics
+- Webcam-based real-time inference
+- Export to ONNX or TensorRT
+- Fine-tuned graph structures based on dataset type
+
+---
+
+Feel free to open an issue or contribute!

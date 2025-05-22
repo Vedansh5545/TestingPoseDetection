@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
-from model import PoseEstimator
+from model import PoseEstimator, create_edge_index, device
 from tqdm import tqdm
 
 class PoseDataset(Dataset):
@@ -12,10 +12,14 @@ class PoseDataset(Dataset):
         pose2d = data['pose2d'].astype(np.float32)
         pose3d = data['pose3d'].astype(np.float32)
 
-        # Normalize 2D inputs
-        pose2d = (pose2d - pose2d.mean()) / (pose2d.std() + 1e-6)
+        self.pose2d_mean = pose2d.mean()
+        self.pose2d_std = pose2d.std()
+
+        pose2d = (pose2d - self.pose2d_mean) / (self.pose2d_std + 1e-6)
         self.pose2d = pose2d
         self.pose3d = pose3d
+
+        np.save("pose2d_mean_std.npy", [self.pose2d_mean, self.pose2d_std])
 
     def __len__(self):
         return len(self.pose2d)
@@ -28,15 +32,8 @@ class PoseDataset(Dataset):
 
 train_data = PoseDataset("mpi_inf_combined.npz")
 train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-
-def create_edge_index(num_joints=28):
-    edges = []
-    for i in range(num_joints - 1):
-        edges.append([i, i+1])
-    return torch.tensor(edges + [list(reversed(e)) for e in edges], dtype=torch.long).t().contiguous()
-
-edge_index = create_edge_index().cuda()
-model = PoseEstimator().cuda()
+model = PoseEstimator().to(device)
+edge_index = create_edge_index()
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
@@ -44,8 +41,8 @@ for epoch in range(10):
     model.train()
     running_loss = 0.0
     for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/10"):
-        inputs = batch['pose2d'].cuda()
-        targets = batch['pose3d'].cuda()
+        inputs = batch['pose2d'].to(device)
+        targets = batch['pose3d'].to(device)
 
         if torch.isnan(inputs).any() or torch.isnan(targets).any():
             continue
@@ -58,7 +55,7 @@ for epoch in range(10):
         optimizer.step()
         running_loss += loss.item()
 
-    print(f"Epoch {epoch+1} Loss: {running_loss/len(train_loader):.4f}")
+    print(f"Epoch {epoch+1} Loss: {running_loss / len(train_loader):.4f}")
 
 torch.save(model.state_dict(), "model_weights.pth")
 print("✅ Model weights saved to model_weights.pth")
