@@ -1,25 +1,26 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
-from model import PoseEstimator, create_edge_index, device
 from tqdm import tqdm
+from model import PoseEstimator, create_edge_index, device
 
-class PoseDataset(Dataset):
+class MPIINF3DHPDataset(Dataset):
     def __init__(self, npz_path):
         data = np.load(npz_path)
         pose2d = data['pose2d'].astype(np.float32)
         pose3d = data['pose3d'].astype(np.float32)
 
-        self.pose2d_mean = pose2d.mean()
-        self.pose2d_std = pose2d.std()
+        if pose2d.shape[-1] == 2:
+            pose2d = np.concatenate([pose2d, np.zeros((pose2d.shape[0], 28, 1), dtype=np.float32)], axis=-1)
 
-        pose2d = (pose2d - self.pose2d_mean) / (self.pose2d_std + 1e-6)
-        self.pose2d = pose2d
+        self.pose2d_mean = pose2d.mean(axis=(0, 1))
+        self.pose2d_std = pose2d.std(axis=(0, 1))
+        self.pose2d = (pose2d - self.pose2d_mean) / (self.pose2d_std + 1e-6)
         self.pose3d = pose3d
 
-        np.save("pose2d_mean_std.npy", [self.pose2d_mean, self.pose2d_std])
+        np.save("pose2d_mean_std.npy", np.array([self.pose2d_mean, self.pose2d_std]))
 
     def __len__(self):
         return len(self.pose2d)
@@ -30,32 +31,38 @@ class PoseDataset(Dataset):
             'pose3d': torch.tensor(self.pose3d[idx]),
         }
 
-train_data = PoseDataset("mpi_inf_combined.npz")
-train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+# Dataset & DataLoader
+dataset = MPIINF3DHPDataset("mpi_inf_combined.npz")
+train_loader = DataLoader(dataset, batch_size=64, shuffle=True)
+
+# Model
 model = PoseEstimator().to(device)
-edge_index = create_edge_index()
+edge_index = create_edge_index().to(device)
+
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
+# Training
 for epoch in range(10):
     model.train()
-    running_loss = 0.0
+    total_loss = 0.0
     for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/10"):
         inputs = batch['pose2d'].to(device)
         targets = batch['pose3d'].to(device)
 
-        if torch.isnan(inputs).any() or torch.isnan(targets).any():
-            continue
-
         optimizer.zero_grad()
-        outputs = model(inputs, edge_index.repeat(inputs.size(0), 1, 1).view(2, -1))
+        edge_batched = edge_index.repeat(inputs.size(0), 1, 1).view(2, -1)
+        outputs = model(inputs, edge_batched)
+
+        if torch.allclose(outputs[0], outputs[1], atol=1e-2):
+            print("⚠️ Warning: collapsed output detected.")
+
         loss = criterion(outputs, targets)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
-        running_loss += loss.item()
+        total_loss += loss.item()
 
-    print(f"Epoch {epoch+1} Loss: {running_loss / len(train_loader):.4f}")
+    print(f"Epoch {epoch+1} Loss: {total_loss / len(train_loader):.4f}")
 
 torch.save(model.state_dict(), "model_weights.pth")
-print("✅ Model weights saved to model_weights.pth")
+print("✅ Model saved to model_weights.pth")
