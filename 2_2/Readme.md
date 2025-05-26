@@ -57,6 +57,7 @@ pip install torch-geometric
 ### 🔹 4. Install Remaining Requirements
 ```bash
 pip install mediapipe opencv-python matplotlib einops tqdm
+pip install mmcv==2.0.0rc4 mmengine==0.10.7 mmpose==1.3.2
 ```
 
 ---

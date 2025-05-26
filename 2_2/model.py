@@ -44,7 +44,7 @@ class AttentionRoutingTransformer(nn.Module):
         return self.norm(x)
 
 class PoseEstimator(nn.Module):
-    def __init__(self, in_channels=2, hidden_dim=128, out_dim=3):
+    def __init__(self, in_channels=3, hidden_dim=128, out_dim=3):
         super().__init__()
         self.gcn1 = SparseGCNBlock(in_channels, hidden_dim)
         self.gcn2 = SparseGCNBlock(hidden_dim, hidden_dim)
