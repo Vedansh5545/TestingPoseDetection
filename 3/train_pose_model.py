@@ -26,23 +26,24 @@ class MPIINF3DHPDataset(Dataset):
         return len(self.pose2d)
 
     def __getitem__(self, idx):
+        pose2d = self.pose2d[idx].copy()
+        if np.random.rand() > 0.5:
+            pose2d += np.random.normal(0, 0.01, pose2d.shape)
         return {
-            'pose2d': torch.tensor(self.pose2d[idx]),
+            'pose2d': torch.tensor(pose2d),
             'pose3d': torch.tensor(self.pose3d[idx]),
         }
 
-# Dataset & DataLoader
+def mpjpe(pred, target):
+    return torch.mean(torch.norm(pred - target, dim=-1))
+
 dataset = MPIINF3DHPDataset("mpi_inf_combined.npz")
 train_loader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-# Model
 model = PoseEstimator().to(device)
 edge_index = create_edge_index().to(device)
-
-criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-# Training
 for epoch in range(10):
     model.train()
     total_loss = 0.0
@@ -57,12 +58,12 @@ for epoch in range(10):
         if torch.allclose(outputs[0], outputs[1], atol=1e-2):
             print("⚠️ Warning: collapsed output detected.")
 
-        loss = criterion(outputs, targets)
+        loss = mpjpe(outputs, targets)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
 
-    print(f"Epoch {epoch+1} Loss: {total_loss / len(train_loader):.4f}")
+    print(f"Epoch {epoch+1} MPJPE Loss: {total_loss / len(train_loader):.4f}")
 
 torch.save(model.state_dict(), "model_weights.pth")
 print("✅ Model saved to model_weights.pth")

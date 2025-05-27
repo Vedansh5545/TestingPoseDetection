@@ -1,10 +1,10 @@
-# model.py (updated for realistic pose graph + stability)
 import torch
 import torch.nn as nn
 from torch_geometric.nn import GCNConv
-from einops import rearrange
 import math
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=28):
         super().__init__()
@@ -24,10 +24,12 @@ class SparseGCNBlock(nn.Module):
         self.gcn = GCNConv(in_channels, out_channels)
         self.norm = nn.LayerNorm(out_channels)
         self.relu = nn.ReLU()
+        self.residual = nn.Linear(in_channels, out_channels) if in_channels != out_channels else nn.Identity()
 
     def forward(self, x, edge_index):
+        res = self.residual(x)
         x = self.gcn(x, edge_index)
-        x = self.norm(x)
+        x = self.norm(x + res)
         return self.relu(x)
 
 class AttentionRoutingTransformer(nn.Module):
@@ -67,15 +69,14 @@ class PoseEstimator(nn.Module):
         x = self.dropout(x)
         return self.head(x)
 
-# Shared utility for edge index creation
-
 def create_edge_index():
     edges = [
-        (0,1), (1,2), (2,3), (3,4),       # Right arm
-        (1,5), (5,6), (6,7),              # Left arm
-        (1,8), (8,9), (9,10), (10,11),    # Right leg
-        (8,12), (12,13), (13,14),         # Left leg
-        (0,15), (0,16), (15,17), (16,18)  # Face / ears (optional)
+        (0,1), (1,8), (8,12),
+        (1,2), (2,3), (3,4),
+        (1,5), (5,6), (6,7),
+        (8,9), (9,10), (10,11),
+        (8,13), (13,14), (14,15),
+        (0,16), (0,17)
     ]
-    edges += [(j, i) for i, j in edges]
+    edges += [(j,i) for i,j in edges]
     return torch.tensor(edges, dtype=torch.long).t().contiguous()
