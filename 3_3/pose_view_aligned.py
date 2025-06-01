@@ -82,7 +82,7 @@ model.eval()
 pose2d_stats = np.load("pose2d_mean_std.npy", allow_pickle=True)
 pose2d_mean, pose2d_std = pose2d_stats[0][:2], pose2d_stats[1][:2]
 
-frame = cv2.imread("input.jpg")
+frame = cv2.imread("input.jpeg")
 if frame is None:
     raise FileNotFoundError("❌ Image not found.")
 h, w = frame.shape[:2]
