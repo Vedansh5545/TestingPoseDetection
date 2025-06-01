@@ -10,7 +10,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # === Load trained model
 model = PoseEstimator().to(device)
-model.load_state_dict(torch.load("model_weights.pth", map_location=device))
+model.load_state_dict(torch.load("best_model_weights.pth", map_location=device))
 model.eval()
 
 # === MediaPipe Pose
