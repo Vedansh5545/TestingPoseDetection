@@ -15,7 +15,7 @@ pose    = mp_pose.Pose(
 )
 
 # === 2) Read & preprocess the input image ===
-image_path = "input2.jpeg"
+image_path = "input.jpeg"
 frame = cv2.imread(image_path)
 if frame is None:
     raise FileNotFoundError(f"❌ Could not find image at: {image_path}")
