@@ -1,50 +1,56 @@
+# visualize.py
 import cv2
 import numpy as np
 
-# === Skeleton Edges
-SKELETON_EDGES = [
-    (0, 1), (1, 8), (8, 12),
-    (1, 2), (2, 3), (3, 4),
-    (1, 5), (5, 6), (6, 7),
-    (8, 9), (9, 10), (10, 11),
-    (8, 13), (13, 14), (14, 15),
-    (0, 16), (0, 17)
+# We’ll use MediaPipe’s built-in POSE_CONNECTIONS for a 33-point 2D skeleton.
+# Each pair (i,j) connects landmark i to landmark j.
+# This is guaranteed to match what MediaPipe’s 2D model uses internally.
+POSE_CONNECTIONS = [
+    (0,1), (1,2), (2,3), (3,7),
+    (0,4), (4,5), (5,6), (6,8),
+    (9,10),
+    (11,12),
+    (11,13), (13,15),
+    (12,14), (14,16),
+    (11,23), (12,24),
+    (23,25), (25,27),
+    (24,26), (26,28),
+    (27,29), (28,30),
+    (29,31), (30,32)
 ]
 
-# === Colors
-EDGE_COLOR = (0, 255, 0)   # Green
-JOINT_COLOR = (0, 0, 255)  # Red
-TEXT_COLOR = (255, 255, 255)  # White
+# Colors (BGR)
+BONE_COLOR      = (0,   255,   0)   # Green for bones
+JOINT_COLOR     = (0,     0, 255)   # Red for each joint
+JOINT_RADIUS    = 4
+BONE_THICKNESS  = 2
+TEXT_COLOR      = (255, 255, 255)   # White for labels
 
-IMG_WIDTH, IMG_HEIGHT = 640, 480
+def draw_2d_pose(frame, landmarks):
+    """
+    Draws a 2D skeleton on 'frame' using MediaPipe's 2D landmarks.
+    
+    - frame: a BGR image (HxW×3).
+    - landmarks: a list (or array) of 33 landmarks, each with normalized x,y (both in [0,1]).
+                 We assume 'landmarks[i].x' and 'landmarks[i].y' are the 2D outputs from MediaPipe.
+    """
 
-def draw_3d_pose(frame, joints_3d, image_dims=(IMG_WIDTH, IMG_HEIGHT), draw_head=True):
-    w, h = image_dims
+    H, W = frame.shape[:2]
 
-    if joints_3d.shape[1] < 2:
-        raise ValueError("Expected 2D or 3D joint coordinates.")
+    # Convert normalized (x,y) ∈ [0,1] to pixel coordinates (0..W-1, 0..H-1)
+    pts_px = np.array([[int(lm.x * W), int(lm.y * H)] for lm in landmarks])
 
-    # === Clip 3D outliers
-    joints_3d = np.clip(joints_3d, -2.5, 2.5)
+    # Draw bones (green lines) according to POSE_CONNECTIONS
+    for (i, j) in POSE_CONNECTIONS:
+        if i < len(pts_px) and j < len(pts_px):
+            p1 = tuple(pts_px[i])
+            p2 = tuple(pts_px[j])
+            if p1 != p2:
+                cv2.line(frame, p1, p2, BONE_COLOR, BONE_THICKNESS)
 
-    # === Project 3D to 2D
-    joints_2d = joints_3d[:, :2] * np.array([w, h])
-    joints_2d = np.nan_to_num(joints_2d, nan=0.0, posinf=0.0, neginf=0.0)
-    joints_2d = np.clip(joints_2d, 0, min(w - 1, h - 1)).astype(int)
-
-    # === Filter edges
-    edges_to_draw = [e for e in SKELETON_EDGES if e[0] < len(joints_2d) and e[1] < len(joints_2d)]
-
-    # === Draw bones (green lines)
-    for i, j in edges_to_draw:
-        pt1 = tuple(joints_2d[i])
-        pt2 = tuple(joints_2d[j])
-        if pt1 != pt2:  # avoid collapsed joints
-            cv2.line(frame, pt1, pt2, EDGE_COLOR, 2)
-
-    # === Draw joints (red dots) and optionally labels
-    for idx, pt in enumerate(joints_2d):
-        cv2.circle(frame, tuple(pt), 4, JOINT_COLOR, -1)
+    # Draw joints (red circles) + index labels
+    for idx, pt in enumerate(pts_px):
+        cv2.circle(frame, tuple(pt), JOINT_RADIUS, JOINT_COLOR, -1)
         cv2.putText(frame, str(idx), tuple(pt), cv2.FONT_HERSHEY_SIMPLEX, 0.4, TEXT_COLOR, 1)
 
     return frame
