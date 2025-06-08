@@ -1,0 +1,102 @@
+**Title: Research and Development Plan for Novel 3D Human Pose Estimation from a Single 2D Image**
+
+---
+
+**Objective:**
+Develop a novel human pose estimation model capable of lifting 2D human keypoints (extracted from a single RGB image) into accurate 3D joint positions using a combination of Graph Neural Networks (GNNs) and Transformers. The goal is to address the challenge of depth ambiguity and publish this work in a top-tier AI/ML conference (e.g., CVPR, ICCV, NeurIPS).
+
+---
+
+**Pipeline Overview:**
+
+1. **Input**: Single RGB image
+2. **2D Keypoint Detection**: MediaPipe Pose Estimation (33 landmarks)
+3. **Joint Mapping**: Remap MediaPipe's 33 landmarks to MPI-INF-3DHP 28 joint format
+4. **Normalization**: Standardize joint positions using saved mean/std
+5. **3D Pose Estimation**: SDG-RAT model (Sparse Dynamic Graph + Routing Attention Transformer)
+6. **Visualization**: Output skeleton in 3D using Matplotlib or Plotly
+7. **Evaluation**: Use MPJPE, P-MPJPE, bone consistency metrics
+
+---
+
+**Model Architecture (SDG-RAT):**
+
+* **Input**: Normalized 2D keypoints, shape (B, 28, 2)
+* **GCN Backbone**:
+
+  * Sparse edge index (based on human kinematic tree)
+  * Dynamic edge refinement (optional)
+  * Edge importance weighting
+* **Transformer Module**:
+
+  * Self-attention over joint embeddings (joint-wise, not temporal)
+  * LayerNorm + FeedForward layers
+* **Projection Head**:
+
+  * Maps joint embeddings to 3D coordinates (x, y, z)
+  * Supervised with MPJPE + bone length consistency
+
+---
+
+**Loss Functions:**
+
+1. **MPJPE (Mean Per Joint Position Error)**
+2. **Bone Length Regularization**
+3. **Projection Loss** (optional): Learnable camera projection simulating 3D-to-2D projection
+4. **Confidence-Weighted Loss** (using MediaPipe landmark confidence)
+
+---
+
+**Data Pipeline:**
+
+* **Training Data**: MPI-INF-3DHP (pose2d, pose3d)
+* **Preprocessing**:
+
+  * Extract from .mat files → .npz files
+  * Normalize 2D joint coordinates
+  * Prepare dataloader with paired (2D, 3D) samples
+
+---
+
+**Depth Ambiguity Solutions:**
+
+| Technique                        | Description                                                |
+| -------------------------------- | ---------------------------------------------------------- |
+| 3D Supervision                   | Supervise with known (2D, 3D) pairs from dataset           |
+| Bone Length Loss                 | Enforces realistic limb proportions                        |
+| Perspective Camera Model         | Learn projection parameters to simulate real camera        |
+| Confidence-Guided Training       | Weigh joints based on MediaPipe confidence score           |
+| Multi-Hypothesis Output (future) | Predict multiple 3D poses per 2D input for ambiguous cases |
+
+---
+
+**Evaluation Metrics:**
+
+* MPJPE (mm)
+* P-MPJPE (after Procrustes alignment)
+* Bone Length Consistency
+* 3D Visualization overlay on image (optional)
+
+---
+
+**Timeline and Milestones:**
+
+| Phase   | Task                                   | Duration |
+| ------- | -------------------------------------- | -------- |
+| Phase 1 | Architecture design & documentation    | 3 days   |
+| Phase 2 | Joint mapper + preprocessing           | 2 days   |
+| Phase 3 | SDG-RAT model code (GNN + Transformer) | 5 days   |
+| Phase 4 | Loss implementation & debugging        | 3 days   |
+| Phase 5 | Training on MPI-INF-3DHP               | 5 days   |
+| Phase 6 | Evaluation & Visualization             | 3 days   |
+| Phase 7 | Paper writing & experiment tables      | 7 days   |
+
+---
+
+**Outcome:**
+A novel GNN + Transformer model (SDG-RAT) capable of lifting 2D poses to 3D with high anatomical accuracy and depth consistency. The system will be tested on benchmark datasets, compared with state-of-the-art models like SemGCN and PoseFormer, and submitted for publication.
+
+---
+
+**Next Step:**
+Begin implementation of joint remapping and SDG-RAT model in PyTorch.

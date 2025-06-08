@@ -1,0 +1,58 @@
+SDG-RAT Model (Sparse Dynamic Graph + Routing Attention Transformer)
+Overview
+The SDG-RAT model is a novel neural architecture designed for 3D human pose estimation from 2D joint coordinates. It integrates sparse graph convolution with joint-wise transformer attention and learnable positional embeddings. The model is lightweight, modular, and accurate, offering depth-aware 3D reconstruction from a single image input.
+
+Model Components
+1. Learnable Positional Encoding
+Instead of using static sinusoidal embeddings, this component uses a learnable parameter matrix to encode joint positions. Each joint gets a trainable positional vector that is updated during training to better reflect anatomical semantics.
+
+2. Sparse GCN Blocks with Edge Importance
+Two GCNConv layers are used to model spatial dependencies between joints. A learnable edge weight is associated with each skeleton edge, allowing the model to focus more on critical bones (e.g., torso, hip) during training. Each GCN block includes:
+
+Residual connection
+
+LayerNorm
+
+ReLU activation
+
+3. Routing Attention Transformer
+This block applies a multi-head Transformer encoder over the joint embeddings. A routing bias is added to each joint token to guide attention flow — allowing joint-specific attention behavior. For example:
+
+Hands may focus more on shoulders
+
+Feet may attend to hips
+
+4. Projection Decoder
+This final component lifts the refined joint embeddings into 3D space using a multi-layer perceptron (MLP):
+
+Linear → ReLU → Linear → Output (x, y, z)
+
+Model Flow
+Input shape: (B, 28, 3) — batch of 2D joints with dummy Z=0
+
+Flattened and passed through Sparse GCN Block 1
+
+Then through Sparse GCN Block 2
+
+Reshaped to (B, 28, hidden_dim) and added to learnable positional encodings
+
+Passed through Routing Attention Transformer
+
+Output passed through Projection Decoder
+
+Final output: (B, 28, 3) — predicted 3D joint coordinates
+
+Innovations and Contributions
+✅ Learnable Positional Embedding per joint (vs fixed sinusoidal)
+✅ Routing Bias Attention — a new way to encode joint relevance in the Transformer
+✅ Edge Importance Weights — learn how much each bone matters dynamically
+✅ Fully modular design: ideal for ablation studies, extension to videos, or plug-and-play modules
+
+Potential Extensions
+Add camera projection model for reprojection loss
+
+Add temporal encoder for video-based 3D pose estimation
+
+Add multi-hypothesis decoding to handle depth ambiguity
+
+Fuse with depth maps or segmentation masks for enhanced spatial priors
