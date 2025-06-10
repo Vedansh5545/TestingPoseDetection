@@ -1,12 +1,15 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from model import Pose3DModel  # Replace with your actual model class
+from model import PoseEstimator as Pose3DModel
 from torch_geometric.utils import dense_to_sparse
 
+# === Force CPU for inference to avoid CUDA OOM
+device = torch.device("cpu")
+
 # === Load model
-model = Pose3DModel().to('cuda')  # Replace with your actual model class
-model.load_state_dict(torch.load("final_model.pth"))
+model = Pose3DModel().to(device)
+model.load_state_dict(torch.load("best_model_weights.pth", map_location=device))
 model.eval()
 
 # === Define bone labels (MediaPipe style indices)
@@ -25,7 +28,7 @@ bone_names = {
     (12, 24): "Right Torso"
 }
 
-# === Biological proportions (approximate lengths in human body units)
+# === Biological proportions (approximate)
 bone_proportions = {
     "Upper Arm": 0.186,
     "Lower Arm": 0.146,
@@ -34,21 +37,22 @@ bone_proportions = {
     "Torso": 0.3
 }
 
-# === Load 2D input pose (simulate missing joints)
-data = np.load("input_pose2d.npz")  # Contains pose2d (shape: 1 x 33 x 2)
-pose2d = torch.tensor(data['pose2d'], dtype=torch.float32).to('cuda')
+# === Load 2D input pose
+data = np.load("mpi_inf_combined.npz")
+print(data.files)
+pose2d = torch.tensor(data['pose2d'], dtype=torch.float32).to(device)
 
-# === Visibility Mask
-visibility = torch.isnan(pose2d).any(dim=-1)  # shape: (1, 33)
-pose2d[visibility] = 0  # Replace NaNs with 0s temporarily
+# === Visibility mask
+visibility = torch.isnan(pose2d).any(dim=-1)
+pose2d[visibility] = 0  # fill missing with zeros
 
-# === Define Graph Structure
+# === Define graph structure
 num_joints = 33
 adj_matrix = np.ones((num_joints, num_joints)) - np.eye(num_joints)
 edge_index, _ = dense_to_sparse(torch.tensor(adj_matrix))
-edge_index = edge_index.to('cuda')
+edge_index = edge_index.to(device)
 
-# === Hallucinate missing joints (based on symmetry or bone copy)
+# === Hallucinate missing joints using symmetry
 def hallucinate(pose, mask):
     pose = pose.clone()
     mirror_map = {
@@ -58,14 +62,17 @@ def hallucinate(pose, mask):
     for i in range(pose.shape[1]):
         if mask[0, i]:
             if i in mirror_map and not mask[0, mirror_map[i]]:
-                pose[0, mirror_map[i]] = pose[0, i] * torch.tensor([-1.0, 1.0]).to('cuda')  # mirror across vertical
+                pose[0, mirror_map[i]] = pose[0, i] * torch.tensor([-1.0, 1.0], dtype=torch.float32).to(device)
     return pose
 
 pose2d_filled = hallucinate(pose2d, visibility)
 
-# === Run Inference
+# === Inference
 with torch.no_grad():
-    input_with_conf = torch.cat([pose2d_filled, torch.ones_like(pose2d_filled[..., :1])], dim=-1)
+    input_with_conf = torch.cat([
+        pose2d_filled, torch.ones_like(pose2d_filled[..., :1])
+    ], dim=-1).to(device)  # Shape: (1, 33, 3)
+
     output_3d = model(input_with_conf, edge_index)
     output_3d = output_3d.squeeze(0).cpu().numpy()
 
@@ -79,8 +86,8 @@ def plot_3d(pose3d, bones, title="3D Pose"):
                 [pose3d[i, 2], pose3d[j, 2]], 'bo-')
     ax.set_title(title)
     ax.view_init(elev=20, azim=-70)
+    plt.tight_layout()
     plt.show()
 
-# Edges to plot (subset of MediaPipe)
 edges = list(bone_names.keys())
 plot_3d(output_3d, edges, title="Bone-Aware 3D Pose Output")

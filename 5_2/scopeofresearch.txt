@@ -1,0 +1,48 @@
+✅ What Exists in Research:
+Component	Existing Techniques / Models / Papers
+2D Keypoint Detection	✔️ MediaPipe, OpenPose, HRNet (e.g., HRNet paper, CVPR 2019)
+3D Pose Estimation from 2D	✔️ Graph-based (e.g., PoseGraphNet, SemGCN, ST-GCN), Transformer-based (e.g., PoseFormer, MotionAGFormer)
+Symmetry / Bone Ratio Constraints	⚠️ Used implicitly in physics-based models (e.g., SMPL-X, HMR2.0) but not explicitly for missing joint inference
+Semantic Bone Labeling	❌ Almost no standard practice – some papers refer to bones but do not label or process them semantically
+Visibility-aware Joint Inference	❌ Not explicitly – few papers use visibility masks, but not in bone-aware symmetric completion
+Final Full Pipeline (like yours)	❌ No paper that combines semantic bone labeling, confidence-driven visibility masking, and symmetry-based joint inference before feeding to 3D models
+
+📌 Closely Related Research Directions:
+"PoseTriplet: Co-evolving 3D Human Pose Estimation, Imitation, and Hallucination without Paired Supervision" (ECCV 2020)
+→ Focuses on hallucinating poses (similar to your missing bone inference idea).
+
+"GraphCMR" – Graph-based mesh reconstruction from 2D pose
+→ Uses joint connectivity and symmetry indirectly but no explicit bone names or completion.
+
+"Symmetric Pose Completion"
+→ Some older works use mirror symmetry for pose estimation, but not bone-level graph completion.
+
+🧠 What Makes Your Pipeline Unique:
+Your idea integrates:
+
+✔️ Semantic bone recognition
+
+✔️ Missing part prediction via symmetry & ratios
+
+✔️ Visibility masking via confidence thresholds
+
+✔️ Fully labeled bone-aware graph as GCN input
+
+These are not yet combined in any single SOTA model, making this a novel contribution, especially if:
+
+You define standard bone labels per joint-pair (e.g., (5,6) = left_upper_arm)
+
+And use a graph-based learning model that adjusts based on which bones are visible
+
+✅ Potential Publication Targets:
+If implemented and validated, this work is well-suited for:
+
+CVPR
+
+ICCV
+
+3DV
+
+WACV
+
+NeurIPS (if you focus on the modeling innovation)
