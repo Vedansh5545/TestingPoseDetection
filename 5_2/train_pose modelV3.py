@@ -14,10 +14,17 @@ if torch.cuda.is_available():
 class MPIINF3DHPDataset(Dataset):
     def __init__(self, npz_path):
         data = np.load(npz_path)
-        pose2d = data['pose2d'].astype(np.float32)
-        pose3d = data['pose3d'].astype(np.float32)
-
+        pose2d = data['pose2d']
+        if pose2d.shape[-1] == 2:
+            conf = np.ones_like(pose2d[..., :1])  # Add confidence=1.0 for each joint
+            pose2d = np.concatenate([pose2d, conf], axis=-1)
         assert pose2d.shape[-1] == 3, "Expecting pose2d with shape (N, 28, 3)"
+
+        pose3d = data['pose3d'].astype(np.float32)
+        pose2d = torch.tensor(pose2d, dtype=torch.float32)
+        pose3d = torch.tensor(pose3d, dtype=torch.float32)
+
+                
 
         self.pose2d_mean = pose2d.mean(axis=(0, 1))
         self.pose2d_std = pose2d.std(axis=(0, 1))
@@ -30,12 +37,14 @@ class MPIINF3DHPDataset(Dataset):
         return len(self.pose2d)
 
     def __getitem__(self, idx):
-        pose2d = self.pose2d[idx].copy()
+        pose2d = self.pose2d[idx].clone()
+
         if np.random.rand() > 0.5:
             pose2d += np.random.normal(0, 0.015, pose2d.shape)  # stronger augmentation
         return {
-            'pose2d': torch.tensor(pose2d),
-            'pose3d': torch.tensor(self.pose3d[idx]),
+            'pose2d': torch.tensor(pose2d, dtype=torch.float32),
+            'pose3d': torch.tensor(self.pose3d[idx], dtype=torch.float32),
+
         }
 
 # === Loss Functions ===
