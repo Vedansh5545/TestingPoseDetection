@@ -1,0 +1,10 @@
+torch==2.2.0+cu121
+torchvision==0.16.0+cu121
+torch-scatter==2.1.2+pt22cu121 -f https://data.pyg.org/whl/torch-2.2.0+cu121.html
+torch-sparse==0.6.18+pt22cu121  -f https://data.pyg.org/whl/torch-2.2.0+cu121.html
+torch-geometric==2.4.0
+mediapipe==0.10.9
+opencv-python==4.9.0.80
+matplotlib==3.8.4
+numpy==1.25.2
+tqdm==4.66.2
