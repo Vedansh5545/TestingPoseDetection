@@ -12,8 +12,8 @@ CONF_THRESH    = 0.1
 
 def draw_2d_pose_28(frame: np.ndarray, pose28: np.ndarray) -> np.ndarray:
     """
-    Draw 28-joint 2D pose on `frame`.
-    pose28: (28,3) array of [x_px, y_px, conf].
+    Draws the 28-joint 2D pose on `frame`.
+    pose28: np.array shape (28,3): [x_px, y_px, conf].
     """
     pts = pose28[:,:2].astype(int)
     # draw bones
@@ -21,8 +21,9 @@ def draw_2d_pose_28(frame: np.ndarray, pose28: np.ndarray) -> np.ndarray:
         if pose28[i,2] > CONF_THRESH and pose28[j,2] > CONF_THRESH:
             cv2.line(frame, tuple(pts[i]), tuple(pts[j]), BONE_COLOR, BONE_THICKNESS)
     # draw joints
-    for idx, (x,y,conf) in enumerate(pose28):
+    for idx,(x,y,conf) in enumerate(pose28):
         if conf > CONF_THRESH:
             cv2.circle(frame, (int(x),int(y)), JOINT_RADIUS, JOINT_COLOR, -1)
-            cv2.putText(frame,str(idx),(int(x),int(y)),cv2.FONT_HERSHEY_SIMPLEX,0.4,(255,255,255),1)
+            cv2.putText(frame, str(idx), (int(x),int(y)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
     return frame

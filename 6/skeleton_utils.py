@@ -1,21 +1,35 @@
 # skeleton_utils.py
 
-# 1) List of (i,j) edges for your 28-joint MPI-INF-3DHP skeleton:
-MPIINF_EDGES = [
-    (0,1), (1,2), (2,3), (3,4),      # right leg
-    (0,5), (5,6), (6,7), (7,8),      # left leg
-    (0,9), (9,10), (10,11),          # spine → neck → head
-    (11,12), (12,13), (13,14),       # left arm
-    (11,15), (15,16), (16,17),       # right arm
-    (9,18), (9,19)                   # shoulders → hips (optional torso edges)
-    # …add or prune to match your 34 total bones
-]
+import torch
+from model import create_edge_index
 
-# 2) Mapping from MediaPipe’s 33-landmark indices → MPI-INF-3DHP [0..27].
-#    Fill in the actual values for your dataset!
-MEDIAPIPE_TO_MPIINF = {
-    0:  9,   # Nose → Neck
-    11: 12,  # Left Shoulder → MPI index for left shoulder
-    12: 15,  # Right Shoulder → MPI index for right shoulder
-    # …continue for all 33 MediaPipe points; unmapped entries → None or skip
-}
+# Build the exact edge list you trained on:
+edge_index = create_edge_index()           # shape: [2, 2*E]
+_edges = edge_index.t().cpu().numpy()      # shape: [2*E, 2]
+# Keep only unique undirected bones (i < j)
+MPIINF_EDGES = [(i, j) for i, j in _edges if i < j]
+
+# === MediaPipe → MPI-INF mapping ===
+# Keys: MediaPipe idx 0..32
+# Values: MPI-INF joint idx 0..27, or None if unused.
+MEDIAPIPE_TO_MPIINF = {i: None for i in range(33)}
+
+# Body landmarks:
+MEDIAPIPE_TO_MPIINF[23] = 5   # Left Hip
+MEDIAPIPE_TO_MPIINF[24] = 1   # Right Hip
+MEDIAPIPE_TO_MPIINF[25] = 6   # Left Knee
+MEDIAPIPE_TO_MPIINF[26] = 2   # Right Knee
+MEDIAPIPE_TO_MPIINF[27] = 7   # Left Ankle
+MEDIAPIPE_TO_MPIINF[28] = 3   # Right Ankle
+MEDIAPIPE_TO_MPIINF[29] = 8   # Left Heel
+MEDIAPIPE_TO_MPIINF[30] = 4   # Right Heel
+
+MEDIAPIPE_TO_MPIINF[11] = 12  # Left Shoulder
+MEDIAPIPE_TO_MPIINF[12] = 15  # Right Shoulder
+MEDIAPIPE_TO_MPIINF[13] = 13  # Left Elbow
+MEDIAPIPE_TO_MPIINF[14] = 16  # Right Elbow
+MEDIAPIPE_TO_MPIINF[15] = 14  # Left Wrist
+MEDIAPIPE_TO_MPIINF[16] = 17  # Right Wrist
+
+MEDIAPIPE_TO_MPIINF[0]  = 11  # Nose → Head Top
+# Pelvis (0) and Neck (10) will be derived at runtime.

@@ -37,7 +37,7 @@ def create_edge_index():
         (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
         (11, 23), (12, 24), (23, 25), (25, 27), (24, 26), (26, 27),
         (0, 15), (0, 16), (15, 17), (16, 18)
-    ]
+    ] 
     # Clip to safe indices
     edges = [(i, j) for i, j in edges if i < 28 and j < 28]
     edges += [(j, i) for i, j in edges]
