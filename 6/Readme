@@ -1,0 +1,189 @@
+# 📘 Sparse GCN + Transformer for Real-Time 3D & 2D-in-3D Human Pose Visualization
+
+This repository contains a **hybrid Sparse Graph Convolution + Attention Transformer** framework for lifting 2D keypoints (from MediaPipe) into 3D, plus utilities to plot 2D poses in 3D space (flat Z=0) with bone-level labels. It includes training scripts, data-processing code, and inference scripts for static images and future video.
+
+---
+
+## ✅ Features
+
+* **Sparse GCN + Transformer Model**
+  • Takes normalized 2D (X,Y,0) inputs → predicts 3D (X,Y,Z) joint positions.
+  • Residual GCN blocks capture local graph structure; Transformer encodes global joint dependencies.
+
+* **2D-in-3D Flat Plotting**
+  • Embed a 2D pose into the plane Z=0.
+  • Flip Y so image “up” → 3D “up.”
+  • Draw bones using MediaPipe’s `POSE_CONNECTIONS`.
+
+* **Bone-Level Classification**
+  • Compute hip line from MediaPipe hips.
+  • Color bones **red** (upper body), **blue** (lower body), **green** (torso).
+  • Annotate bone midpoints and include a legend.
+
+* **3D Pose Prediction & Alignment**
+  • `PoseEstimator` (GCN+Transformer) lifts 2D → 3D.
+  • SolvePnP aligns predicted 3D with original image view.
+
+* **Modular Visualization**
+  • `visualize.py`: 2D overlay on image.
+  • `plot_3d_skeleton.py`: upright 3D skeleton.
+  • `plot_2d_in_3d_*.py`: flat Z=0 embeddings with optional bone labels.
+
+* **Device-Agnostic**: Runs on CPU or GPU without code changes.
+
+---
+
+## 📁 Directory Structure
+
+```
+.
+├── README.md                        # This file
+├── model.py                        # Sparse GCN + Transformer implementation
+├── train_pose_model_v2.py         # Training script (MPI-INF-3DHP, MPJPE + bone loss)
+├── train_pose_model_v3.py         # Alt training with 3-channel 2D input
+├── extract_mpi_inf_3dhp.py         # Convert raw MPI-INF .mat → .npz
+├── mpi_inf_combined.npz           # Preprocessed MPI-INF-3DHP dataset
+├── pose2d_mean_std.npy            # 2D normalization stats
+├── final_model_weights.pth        # Pretrained weights
+│
+├── predict_image.py               # Inference on static image → overlay
+├── visualize.py                   # 2D overlay utility
+├── plot_3d_skeleton.py            # Upright 3D skeleton plot
+├── plot_2d_in_3d_corrected.py     # Flat Z=0 embedding
+└── plot_2d_in_3d_with_bone_labels_and_legend.py # Flat Z=0 + bone classification
+```
+
+---
+
+## ⚙️ Setup Instructions
+
+### 1. Conda Environment
+
+```bash
+conda create -n sparse_pose_env python=3.10 -y
+conda activate sparse_pose_env
+```
+
+### 2. Install PyTorch & PyG (CUDA 12.1)
+
+```bash
+pip install torch==2.2.0+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cu121.html
+pip install torch-sparse  -f https://data.pyg.org/whl/torch-2.2.0+cu121.html
+pip install torch-geometric
+```
+
+### 3. Other Dependencies
+
+```bash
+pip install mediapipe opencv-python matplotlib einops tqdm imageio
+```
+
+> **Note:** For flat 2D→3D scripts only, PyTorch/PyG is optional.
+
+---
+
+## 🏋️‍♂️ Training Your Own Model
+
+1. Place `mpi_inf_combined.npz` in the root (contains 2D and 3D arrays).
+2. Run:
+
+   ```bash
+   python train_pose_model_v2.py
+   ```
+3. Outputs:
+
+   * `best_model_weights.pth` (validation best)
+   * `final_model_weights.pth`
+   * Updated `pose2d_mean_std.npy`
+
+Use `train_pose_model_v3.py` for 2D-only inputs (zero-pad Z).
+
+---
+
+## 🖼️ Predict & Visualize 3D Pose
+
+```bash
+python predict_image.py input.jpg
+```
+
+* Extracts 2D → normalize → GCN+Transformer → 3D
+* SolvePnP alignment → overlay saved to `output.jpg`
+
+For flat 2D-in-3D:
+
+```bash
+python plot_2d_in_3d_corrected.py
+# or
+python plot_2d_in_3d_with_bone_labels_and_legend.py
+```
+
+---
+
+## 🎨 Visualization Utilities
+
+* **`visualize.py`**: draw 33 landmarks + bones on BGR image.
+* **`plot_3d_skeleton.py`**: recenter at pelvis, scale to \~1.5m, plot upright.
+* **`plot_2d_in_3d_*.py`**: embed 2D on Z=0 plane, classify bones.
+
+---
+
+## 📦 Tested Versions
+
+| Library         | Version     |
+| --------------- | ----------- |
+| Python          | 3.10.x      |
+| torch           | 2.1.0+cu121 |
+| torch-geometric | 2.4.0       |
+| mediapipe       | 0.10.9      |
+| opencv-python   | 4.9.0       |
+| matplotlib      | 3.8.4       |
+
+---
+
+## 🚀 Examples
+
+**Flat 2D Pose:**
+
+```bash
+python plot_2d_in_3d_corrected.py
+```
+
+**Bone Classes + Legend:**
+
+```bash
+python plot_2d_in_3d_with_bone_labels_and_legend.py
+```
+
+**3D Overlay:**
+
+```bash
+python predict_image.py
+```
+
+**Upright 3D:**
+
+```bash
+python plot_3d_skeleton.py
+```
+
+---
+
+## ✍️ Citation
+
+If you use this code, please cite:
+
+```
+Vedansh Tembhre, 2025. “Hybrid Sparse Graph and Transformer Architecture for Real-Time 3D Human Pose Estimation.”
+```
+
+---
+
+## 🔧 Future Enhancements
+
+* **Real-time video/webcam support**
+* **Temporal smoothing & depth refinement**
+* **TorchScript/ONNX export for edge**
+* **Learnable adjacency & advanced priors**
+
+Feel free to open issues or PRs! 🚀

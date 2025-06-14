@@ -1,93 +1,52 @@
-import torch
+# bone_aware_inference.py
+
+import argparse
 import numpy as np
-import matplotlib.pyplot as plt
-from model import PoseEstimator as Pose3DModel
+import torch
 from torch_geometric.utils import dense_to_sparse
+import matplotlib.pyplot as plt
+from model import PoseEstimator    # adjust import to your model’s class
+from skeleton_utils import MPIINF_EDGES
 
-# === Force CPU for inference to avoid CUDA OOM
-device = torch.device("cpu")
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("input_npy", help="Path to pose2d_28.npy")
+    p.add_argument("--weights", default="best_model_weights.pth", help="Path to trained .pth")
+    args = p.parse_args()
 
-# === Load model
-model = Pose3DModel().to(device)
-model.load_state_dict(torch.load("best_model_weights.pth", map_location=device))
-model.eval()
+    # load 2D input
+    pose2d = np.load(args.input_npy)   # shape (28,3)
+    assert pose2d.shape == (28,3)
+    pose2d_tensor = torch.tensor(pose2d, dtype=torch.float32).unsqueeze(0)  # (1,28,3)
 
-# === Define bone labels (MediaPipe style indices)
-bone_names = {
-    (11, 13): "Left Upper Arm",
-    (13, 15): "Left Lower Arm",
-    (12, 14): "Right Upper Arm",
-    (14, 16): "Right Lower Arm",
-    (23, 25): "Left Thigh",
-    (25, 27): "Left Calf",
-    (24, 26): "Right Thigh",
-    (26, 28): "Right Calf",
-    (11, 12): "Shoulders",
-    (23, 24): "Hips",
-    (11, 23): "Left Torso",
-    (12, 24): "Right Torso"
-}
+    # build adjacency
+    adj = np.zeros((28,28), dtype=int)
+    for i,j in MPIINF_EDGES:
+        adj[i,j] = adj[j,i] = 1
+    edge_index, _ = dense_to_sparse(torch.tensor(adj))
 
-# === Biological proportions (approximate)
-bone_proportions = {
-    "Upper Arm": 0.186,
-    "Lower Arm": 0.146,
-    "Thigh": 0.245,
-    "Calf": 0.246,
-    "Torso": 0.3
-}
+    # load model
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = PoseEstimator().to(device)
+    model.load_state_dict(torch.load(args.weights, map_location=device))
+    model.eval()
 
-# === Load 2D input pose
-data = np.load("mpi_inf_combined.npz")
-print(data.files)
-pose2d = torch.tensor(data['pose2d'], dtype=torch.float32).to(device)
+    # inference
+    inp = torch.cat([pose2d_tensor, torch.ones_like(pose2d_tensor[...,:1])], dim=-1)  # (1,28,4)
+    with torch.no_grad():
+        pred3d = model(inp.to(device), edge_index.to(device)).squeeze(0).cpu().numpy()  # (28,3)
 
-# === Visibility mask
-visibility = torch.isnan(pose2d).any(dim=-1)
-pose2d[visibility] = 0  # fill missing with zeros
-
-# === Define graph structure
-num_joints = 33
-adj_matrix = np.ones((num_joints, num_joints)) - np.eye(num_joints)
-edge_index, _ = dense_to_sparse(torch.tensor(adj_matrix))
-edge_index = edge_index.to(device)
-
-# === Hallucinate missing joints using symmetry
-def hallucinate(pose, mask):
-    pose = pose.clone()
-    mirror_map = {
-        11: 12, 13: 14, 15: 16, 23: 24, 25: 26, 27: 28,
-        12: 11, 14: 13, 16: 15, 24: 23, 26: 25, 28: 27
-    }
-    for i in range(pose.shape[1]):
-        if mask[0, i]:
-            if i in mirror_map and not mask[0, mirror_map[i]]:
-                pose[0, mirror_map[i]] = pose[0, i] * torch.tensor([-1.0, 1.0], dtype=torch.float32).to(device)
-    return pose
-
-pose2d_filled = hallucinate(pose2d, visibility)
-
-# === Inference
-with torch.no_grad():
-    input_with_conf = torch.cat([
-        pose2d_filled, torch.ones_like(pose2d_filled[..., :1])
-    ], dim=-1).to(device)  # Shape: (1, 33, 3)
-
-    output_3d = model(input_with_conf, edge_index)
-    output_3d = output_3d.squeeze(0).cpu().numpy()
-
-# === Plotting
-def plot_3d(pose3d, bones, title="3D Pose"):
-    fig = plt.figure()
+    # plot
+    fig = plt.figure(figsize=(6,6))
     ax = fig.add_subplot(111, projection='3d')
-    for i, j in bones:
-        ax.plot([pose3d[i, 0], pose3d[j, 0]],
-                [pose3d[i, 1], pose3d[j, 1]],
-                [pose3d[i, 2], pose3d[j, 2]], 'bo-')
-    ax.set_title(title)
+    for i,j in MPIINF_EDGES:
+        x = [pred3d[i,0], pred3d[j,0]]
+        y = [pred3d[i,1], pred3d[j,1]]
+        z = [pred3d[i,2], pred3d[j,2]]
+        ax.plot(x,y,z,'bo-')
+    ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
     ax.view_init(elev=20, azim=-70)
-    plt.tight_layout()
     plt.show()
 
-edges = list(bone_names.keys())
-plot_3d(output_3d, edges, title="Bone-Aware 3D Pose Output")
+if __name__ == "__main__":
+    main()

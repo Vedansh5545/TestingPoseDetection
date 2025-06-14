@@ -1,45 +1,52 @@
 # predict_image.py
+
+import argparse
 import cv2
+import numpy as np
 import mediapipe as mp
 
-from visualize import draw_2d_pose
+from skeleton_utils import MEDIAPIPE_TO_MPIINF
+from visualize_28 import draw_2d_pose_28
 
-# === 1) Initialize MediaPipe Pose for 2D landmarks ===
-mp_pose = mp.solutions.pose
-pose    = mp_pose.Pose(
-    static_image_mode=True,
-    model_complexity=2,
-    enable_segmentation=False,
-    min_detection_confidence=0.3,
-    min_tracking_confidence=0.3
-)
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("input_image", help="Path to input image file")
+    p.add_argument("--output_img", default="output_28.jpg", help="Path to save visualized 2D pose")
+    p.add_argument("--output_npy", default="pose2d_28.npy", help="Path to save (28,3) numpy array")
+    args = p.parse_args()
 
-# === 2) Read & preprocess the input image ===
-image_path = "input.jpeg"
-frame = cv2.imread(image_path)
-if frame is None:
-    raise FileNotFoundError(f"❌ Could not find image at: {image_path}")
+    # read
+    frame = cv2.imread(args.input_image)
+    if frame is None:
+        raise FileNotFoundError(f"Could not read {args.input_image}")
+    H, W = frame.shape[:2]
 
-# Resize to 480×480 so the 2D landmarks map correctly
-frame      = cv2.resize(frame, (480, 480))
-frame_rgb  = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # init MediaPipe
+    mp_pose = mp.solutions.pose
+    pose = mp_pose.Pose(static_image_mode=True)
 
-# === 3) Run MediaPipe to detect 2D pose ===
-results = pose.process(frame_rgb)
+    # process
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = pose.process(frame_rgb)
+    if not results.pose_landmarks:
+        raise RuntimeError("No pose detected")
 
-# If no landmarks are found, print a message and exit
-if not results.pose_landmarks:
-    print("❌ No pose detected. Try a different image or higher resolution.")
-    exit()
+    # build 28×3 array
+    pose2d_28 = np.zeros((28, 3), dtype=np.float32)
+    for mp_idx, mpi_idx in MEDIAPIPE_TO_MPIINF.items():
+        if mpi_idx is None:
+            continue
+        lm = results.pose_landmarks.landmark[mp_idx]
+        pose2d_28[mpi_idx] = [lm.x * W, lm.y * H, lm.visibility]
 
-# === 4) Draw the 2D skeleton on top of the frame ===
-# 'results.pose_landmarks.landmark' is a list of 33 normalized (x,y,z,visibility).
-# We only need x,y for 2D drawing.
-output_img = draw_2d_pose(frame.copy(), results.pose_landmarks.landmark)
+    # save
+    np.save(args.output_npy, pose2d_28)
+    print(f"Saved 2D pose to {args.output_npy}")
 
-# === 5) Show & save the final image ===
-cv2.imshow("MediaPipe 2D Pose Overlay", output_img)
-cv2.imwrite("output.jpg", output_img)
-print("✅ Saved output to output.jpg")
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+    # visualize & save
+    vis = draw_2d_pose_28(frame.copy(), pose2d_28)
+    cv2.imwrite(args.output_img, vis)
+    print(f"Saved visualization to {args.output_img}")
+
+if __name__ == "__main__":
+    main()
