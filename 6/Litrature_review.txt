@@ -1,0 +1,83 @@
+In this section, I critically examine the most influential approaches to monocular 3D human pose estimation—focusing on weakly-supervised anatomical priors, adversarial regularization, and graph-based learning—and contrast them with my structured, multi-stage pipeline. This review highlights both methodological advances and remaining gaps that my work aims to address.
+
+2.1 Weakly-Supervised Anatomical and Geometric Priors
+Zhou et al. (ICCV 2017) introduced one of the first weakly-supervised frameworks that blends 2D annotations from in-the-wild images with full 3D labels from lab-controlled datasets. Their cascaded network jointly learns a 2D pose estimator (Stacked Hourglass) and a depth-regression module in an end-to-end manner, leveraging a geometric bone-length constraint to regularize 3D predictions when explicit depth labels are absent 
+vision.unipv.it
+arxiv.org
+. By enforcing approximately fixed ratios among limb segments (e.g., upper-arm to lower-arm), they achieved a ~5 mm improvement in MPJPE on Human3.6M compared to purely supervised baselines.
+
+Building on this, Dabral et al. (ECCV 2018) proposed two anatomically-inspired loss functions—one penalizing joint angles that fall outside human-feasible ranges, and another enforcing left-right symmetry and consistent bone-length ratios across the skeleton 
+arxiv.org
+openaccess.thecvf.com
+. They further demonstrated that a lightweight temporal harmonization network (1D convolutions over time) effectively smooths frame-wise 3D estimates in video sequences, reducing jitter by exploiting motion continuity 
+openaccess.thecvf.com
+arxiv.org
+. Their approach yielded an 11.8% MPJPE reduction on Human3.6M and a 12% improvement on MPI-INF-3DHP, running at 30 FPS on commodity hardware.
+
+Key insights:
+
+Anatomical losses shape the 3D output to respect human biomechanics without requiring additional supervision.
+
+Geometric constraints transfer well from controlled to wild settings but offer no explicit handling of occlusion or missing joints.
+
+Temporal smoothing benefits video but is rarely applied to single-image inference.
+
+2.2 Adversarial Regularization
+Yang et al. (CVPR 2018) introduced an adversarial learning paradigm to distill 3D pose structures from lab-annotated data into in-the-wild images 
+openaccess.thecvf.com
+. They train a discriminator to distinguish ground-truth 3D poses from network outputs, effectively learning a geometric descriptor that encodes pairwise joint relationships. This strategy enforces plausible skeleton topology and improves robustness to domain shift, without modifying the backbone detector.
+
+Limitation: Adversarial frameworks can be unstable to train and still depend on accurate 2D keypoints; they do not explicitly recover occluded joints.
+
+2.3 Graph- and Transformer-Based Architectures
+Graph Convolutional Networks (GCNs) have emerged as a natural fit for skeleton-structured data. Zhao et al.’s Semantic GCN (CVPR 2019) learns to capture both local and global joint relationships by augmenting the fixed skeletal graph with semantic edge weights, outperforming prior methods with 90% fewer parameters 
+arxiv.org
+. More recent advances include:
+
+Modulated GCN (ICCV 2021), which introduces per-node feature transformations to overcome shared-weight limitations in standard GCN layers 
+openaccess.thecvf.com
+.
+
+Conditional Directed GCN (WACV 2021), which models the skeleton as a directed graph—capturing hierarchical parent→child bone relationships—and conditions the graph topology on the input pose for adaptive connectivity 
+arxiv.org
+.
+
+Pose2Mesh (ECCV 2020), which extends GCNs to estimate a full 3D mesh from 2D keypoints, demonstrating the flexibility of graph-structured regression 
+arxiv.org
+.
+
+Transformer-based architectures (e.g., “PoseFormer”) further improve global context modeling via self-attention, but they typically treat the skeleton as a sequence rather than a structured graph.
+
+2.4 Gaps and Opportunities
+Aspect	Prior Works	My Pipeline	Remaining Gaps
+Structural Priors	Embedded via loss (Dabral, Zhou) or adversarial signal	Explicit semantic bone labeling & graph construction	Loss functions not yet integrated into graph modules
+Occlusion Handling	Implicit (Zhou) or not addressed	Visibility masks & missing bone inference via symmetry	Inference not learned end-to-end; heuristic rather than learned
+Architecture	CNN-based regressor or GCN alone	Hybrid GCN + Transformer + Decoder	Adjacency fixed; no adaptive or learnable graph topology
+Temporal Consistency	1D-conv smoothing (Dabral)	Absent	Module could be appended for video sequences
+Supervision Regime	Weakly-supervised mix of 2D/3D	Fully supervised on 3D datasets	No weakly-supervised mixing, limiting in-the-wild generalization
+Adversarial Robustness	Discriminator regularizes pose realism	Not currently incorporated	Potential to add adversarial critic for structural realism
+
+2.5 Pathways for Improvement
+To advance beyond existing frameworks, my research will:
+
+Integrate Anatomical & Geometric Losses
+
+Embed joint-angle and bone-length constraints directly into the GCN + Transformer loss, combining the best of Dabral et al. and Zhou et al.
+
+End-to-End Missing-Bone Learning
+
+Replace heuristic symmetry inference with a learnable module—conditioning missing-joint prediction on visible neighbors and semantic bone type.
+
+Dynamic Graph Adaptation
+
+Parameterize and learn adjacency weights (à la Semantic GCN), enabling the network to emphasize or attenuate edges based on pose context.
+
+Weakly-Supervised Training
+
+Mix in-the-wild 2D-only images and 3D-annotated lab data during training, fostering better generalization to unconstrained settings.
+
+Temporal Harmonization & Adversarial Refinement
+
+Append a lightweight temporal smoothing network for video and incorporate a pose-discriminator to enforce anatomical plausibility under challenging viewpoints.
+
+By systematically combining structured graph representations, transformer-driven global context, and anatomically-informed learning, my work aims to deliver accurate, robust 3D skeletons—even under occlusion and in the wild—while remaining efficient enough for real-time applications. This literature foundation both motivates and guides the design choices in my multi-stage pose-estimation pipeline.
