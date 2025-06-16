@@ -1,5 +1,6 @@
 # skeleton_utils.py
 import torch
+from model import create_edge_index
 
 # 17 COCO joints ← MediaPipe indices
 MEDIAPIPE_TO_COCO17 = {
@@ -32,3 +33,15 @@ COCO17_EDGES = [
 EDGE_INDEX = torch.tensor(
     COCO17_EDGES + [(j,i) for i,j in COCO17_EDGES],
     dtype=torch.long).t().contiguous()
+
+
+# Generate the 2×E edge_index from your model definition
+edge_index = create_edge_index()                     # shape: [2, E]
+_edges = edge_index.t().cpu().numpy()                # shape: [E, 2]
+# Keep only the undirected unique edges (i < j)
+MPIINF_EDGES = [(i, j) for i, j in _edges if i < j]
+
+# Map each of the 33 MediaPipe landmarks to your 28-joint MPI-INF skeleton
+# Keys: MediaPipe index 0..32
+# Values: MPI-INF joint index 0..27, or None if unused
+MEDIAPIPE_TO_MPIINF = {i: (i if i < 28 else None) for i in range(33)}

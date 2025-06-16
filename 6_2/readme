@@ -1,0 +1,141 @@
+# 📘 Sparse GCN + Transformer for Real-Time 3D & 2D-in-3D Human Pose Visualization
+
+This repository implements a **hybrid Sparse Graph Convolution + Attention Transformer** framework to lift 2D keypoints (via MediaPipe) into 3D poses and visualize both flat (Z=0) and upright (true 3D) skeletons. It includes end-to-end support for:
+
+* **Data loading** (MPI-INF-3DHP 28-joint dataset)
+* **Model training** with MPJPE + bone-length regularization, learning-rate scheduling, and early stopping
+* **Quantitative evaluation** on held-out validation data
+* **Static image inference** (2D extraction → 3D prediction → 2D & 3D visualizations)
+* **Plotting utilities** for both 2D overlays and 3D skeletons
+* **Model export** to TorchScript for deployment
+
+---
+
+## ✅ Key Components
+
+| Script/File            | Purpose                                                       |
+| ---------------------- | ------------------------------------------------------------- |
+| `data_loader.py`       | `MPIINF3DHPDataset`: loads/normalizes MPI-INF-3DHP npz file   |
+| `model.py`             | `PoseEstimator` (SparseGCN+Transformer) + `create_edge_index` |
+| `train.py`             | Train with MPJPE + bone loss, ReduceLROnPlateau, early stop   |
+| `eval.py`              | Compute final val MPJPE over held-out 10% of dataset          |
+| `infer.py`             | Single-image inference: 2D MediaPipe → 3D prediction → plots  |
+| `visualize.py`         | `draw_2d_pose_28()` and `draw_coco17()/plot_3d()` utilities   |
+| `visualize_eval.py`    | Qualitative plots for first 5 val samples (2D + 3D)           |
+| `export_model.py`      | Trace & save model to TorchScript (`pose_estimator.ts`)       |
+| `skeleton_utils.py`    | `MPIINF_EDGES` + `MEDIAPIPE_TO_MPIINF` mapping                |
+| `mpi_inf_combined.npz` | Preprocessed MPI-INF-3DHP dataset (28-joint, 2D+3D arrays)    |
+| `pose2d_mean_std.npy`  | Saved normalization statistics (mean, std)                    |
+
+---
+
+## 📁 Directory Structure
+
+```
+.
+├── README.md                    # This file
+├── data_loader.py               # MPI-INF-3DHP dataset loader
+├── model.py                     # SparseGCN+Transformer implementation
+├── skeleton_utils.py            # Edge list & MP→MPI joint mapping
+├── train.py                     # Training script with LR schedule & early stop
+├── eval.py                      # Val MPJPE evaluation over held-out set
+├── infer.py                     # 2D → 3D inference on a single image
+├── visualize.py                 # draw_2d_pose_28, draw_coco17, plot_3d
+├── visualize_eval.py            # Qualitative 2D & 3D plots of val samples
+├── export_model.py              # Export model to TorchScript
+├── mpi_inf_combined.npz         # Preprocessed dataset (28 joints)
+├── pose2d_mean_std.npy          # Normalization stats
+└── best_model_weights.pth       # Best validation model weights
+```
+
+---
+
+## ⚙️ Setup
+
+1. **Create & activate Conda env** (Python 3.10)
+
+   ```bash
+   conda create -n sparse_pose_env python=3.10 -y
+   conda activate sparse_pose_env
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   pip install \
+     torch==2.2.0+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
+     torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cu121.html \
+     torch-sparse  -f https://data.pyg.org/whl/torch-2.2.0+cu121.html \
+     torch-geometric==2.4.0 \
+     mediapipe opencv-python matplotlib numpy tqdm
+   ```
+
+> **Note:** For flat Z=0 plotting only, PyTorch & PyG are optional.
+
+---
+
+## 🏋️‍♂️ Training
+
+```bash
+python train.py \
+  --data mpi_inf_combined.npz \
+  --bs 128 \
+  --epochs 150 \
+  --lr 0.002 \
+  --patience 10
+```
+
+* Uses **MPJPE + 0.01× bone\_length\_loss**, ReduceLROnPlateau (factor 0.5, patience 5), early stop (10 epochs)
+* Saves `best_model_weights.pth` on val improvement
+
+---
+
+## 📊 Evaluation
+
+Compute final MPJPE on held-out 10%:
+
+```bash
+python eval.py --data mpi_inf_combined.npz --bs 64
+```
+
+Expect a **final val MPJPE ≈ 50 mm**.
+
+---
+
+## 🖼️ Inference & Visualization
+
+### Single-Image Inference
+
+```bash
+python infer.py path/to/image.jpg --weights best_model_weights.pth
+```
+
+* Saves `overlay_coco17.jpg` (2D COCO-17 overlay) and displays 3D plot
+
+### Qualitative Val Plots
+
+```bash
+python visualize_eval.py
+```
+
+* Displays 2D overlays and 3D skeletons for 5 val samples
+
+---
+
+## 🚀 Model Export
+
+Trace to TorchScript for deployment:
+
+```bash
+python export_model.py
+```
+
+Produces `pose_estimator.ts`.
+
+---
+
+## ✍️ Citation
+
+If you use this work, please cite:
+
+> Vedansh Tembhre, 2025. "Hybrid Sparse Graph and Transformer Architecture for Real-Time 3D Human Pose Estimation."
