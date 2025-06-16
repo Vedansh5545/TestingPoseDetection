@@ -1,141 +1,173 @@
 # 📘 Sparse GCN + Transformer for Real-Time 3D & 2D-in-3D Human Pose Visualization
 
-This repository implements a **hybrid Sparse Graph Convolution + Attention Transformer** framework to lift 2D keypoints (via MediaPipe) into 3D poses and visualize both flat (Z=0) and upright (true 3D) skeletons. It includes end-to-end support for:
+This repository implements a **hybrid Sparse Graph Convolution + Attention Transformer** pipeline to lift 2D keypoints (via MediaPipe) into 3D skeletons, plus a full suite of 2D-in-3D visualization and data-processing utilities. It supports:
 
-* **Data loading** (MPI-INF-3DHP 28-joint dataset)
-* **Model training** with MPJPE + bone-length regularization, learning-rate scheduling, and early stopping
-* **Quantitative evaluation** on held-out validation data
-* **Static image inference** (2D extraction → 3D prediction → 2D & 3D visualizations)
-* **Plotting utilities** for both 2D overlays and 3D skeletons
-* **Model export** to TorchScript for deployment
+- **Data loading** & preprocessing for MPI-INF-3DHP (28-joint)  
+- **Model training** with MPJPE + bone-length regularization, LR scheduling, early stopping  
+- **Quantitative evaluation** on held-out validation splits  
+- **Single-image inference**: 2D extraction → 3D prediction → overlay & 3D plots  
+- **2D plotting utilities**: flat “Z=0” embeddings, bone labels, grouped coloring, visibility masks, missing-bone inference  
+- **Model export** to TorchScript for deployment  
 
 ---
 
 ## ✅ Key Components
 
-| Script/File            | Purpose                                                       |
-| ---------------------- | ------------------------------------------------------------- |
-| `data_loader.py`       | `MPIINF3DHPDataset`: loads/normalizes MPI-INF-3DHP npz file   |
-| `model.py`             | `PoseEstimator` (SparseGCN+Transformer) + `create_edge_index` |
-| `train.py`             | Train with MPJPE + bone loss, ReduceLROnPlateau, early stop   |
-| `eval.py`              | Compute final val MPJPE over held-out 10% of dataset          |
-| `infer.py`             | Single-image inference: 2D MediaPipe → 3D prediction → plots  |
-| `visualize.py`         | `draw_2d_pose_28()` and `draw_coco17()/plot_3d()` utilities   |
-| `visualize_eval.py`    | Qualitative plots for first 5 val samples (2D + 3D)           |
-| `export_model.py`      | Trace & save model to TorchScript (`pose_estimator.ts`)       |
-| `skeleton_utils.py`    | `MPIINF_EDGES` + `MEDIAPIPE_TO_MPIINF` mapping                |
-| `mpi_inf_combined.npz` | Preprocessed MPI-INF-3DHP dataset (28-joint, 2D+3D arrays)    |
-| `pose2d_mean_std.npy`  | Saved normalization statistics (mean, std)                    |
+| Script / File                         | Purpose                                                                                       |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `data_loader.py`                      | `MPIINF3DHPDataset`: loads & normalizes MPI-INF-3DHP `.npz`                                    |
+| `model.py`                            | `PoseEstimator` (Sparse GCN + Transformer) + `create_edge_index`                              |
+| `skeleton_utils.py`                   | `MPIINF_EDGES` (28-joint graph) & `MEDIAPIPE_TO_MPIINF` mapping                                |
+| `train.py`                            | Training loop (MPJPE + bone loss), `ReduceLROnPlateau`, early stopping                        |
+| `eval.py`                             | Computes final val MPJPE on held-out 10%                                                       |
+| `infer.py`                            | Single-image inference → 2D MediaPipe → 3D prediction → 2D/3D plots                            |
+| `export_model.py`                     | Trace & save model to TorchScript (`pose_estimator.ts`)                                       |
+| **2D Overlay / Visualization**        |                                                                                               |
+| `visualize.py`                        | Basic overlays: `draw_2d_pose_28()`, `draw_coco17()`, `plot_3d()`                              |
+| `overlay_2d.py`                       | Simple green-bones + red-joints overlay                                                       |
+| `mask_utils.py`                       | `joint_visibility_mask()` & `bone_visibility_mask()`                                          |
+| `overlay_with_masks.py`               | Green/gray bones + red joints based on visibility masks                                       |
+| `missing_bone_inference.py`           | Fill missing joints by symmetry & average-length priors                                       |
+| `overlay_2d_named.py`                 | Annotate each bone with its MediaPipe landmark names                                           |
+| `overlay_2d_colored_legend.py`        | Unique color per MediaPipe connection + on-image legend                                       |
+| `overlay_2d_grouped.py`               | Color bones by body-part category (arms, legs, torso) + legend                                 |
+| `overlay_2d_grouped_filled.py`        | Same as grouped but uses `missing_bone_inference` to fill occlusions                           |
+| `visualize_eval.py`                   | Qualitative 2D & 3D plots for first 5 validation samples                                      |
+| **Data & Models**                     |                                                                                               |
+| `mpi_inf_combined.npz`                | Preprocessed MPI-INF-3DHP dataset (28✕2 & 28✕3 arrays)                                         |
+| `pose2d_mean_std.npy`                 | Saved 2D normalization statistics (mean, std)                                                 |
+| `best_model_weights.pth`              | Best validation checkpoint                                                                     |
 
 ---
 
 ## 📁 Directory Structure
 
-```
 .
-├── README.md                    # This file
-├── data_loader.py               # MPI-INF-3DHP dataset loader
-├── model.py                     # SparseGCN+Transformer implementation
-├── skeleton_utils.py            # Edge list & MP→MPI joint mapping
-├── train.py                     # Training script with LR schedule & early stop
-├── eval.py                      # Val MPJPE evaluation over held-out set
-├── infer.py                     # 2D → 3D inference on a single image
-├── visualize.py                 # draw_2d_pose_28, draw_coco17, plot_3d
-├── visualize_eval.py            # Qualitative 2D & 3D plots of val samples
-├── export_model.py              # Export model to TorchScript
-├── mpi_inf_combined.npz         # Preprocessed dataset (28 joints)
-├── pose2d_mean_std.npy          # Normalization stats
-└── best_model_weights.pth       # Best validation model weights
-```
+├── README.md
+├── data_loader.py
+├── model.py
+├── skeleton_utils.py
+├── missing_bone_inference.py
+├── mask_utils.py
+├── train.py
+├── eval.py
+├── infer.py
+├── export_model.py
+│
+├── visualize.py
+├── overlay_2d.py
+├── overlay_with_masks.py
+├── overlay_2d_named.py
+├── overlay_2d_colored_legend.py
+├── overlay_2d_grouped.py
+├── overlay_2d_grouped_filled.py
+├── visualize_eval.py
+│
+├── mpi_inf_combined.npz
+├── pose2d_mean_std.npy
+└── best_model_weights.pth
+
+yaml
+Copy
+Edit
 
 ---
 
-## ⚙️ Setup
+## ⚙️ Setup & Installation
 
-1. **Create & activate Conda env** (Python 3.10)
-
+1. **Create & activate** a Conda env (Python 3.10):
    ```bash
    conda create -n sparse_pose_env python=3.10 -y
    conda activate sparse_pose_env
-   ```
+Install core dependencies:
 
-2. **Install dependencies**
+bash
+Copy
+Edit
+pip install \
+  torch==2.2.0+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
+  torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cu121.html \
+  torch-sparse  -f https://data.pyg.org/whl/torch-2.2.0+cu121.html \
+  torch-geometric==2.4.0 \
+  mediapipe opencv-python matplotlib numpy tqdm
+Tip: If you only need flat “Z=0” 2D plots, you can skip installing PyTorch & PyG.
 
-   ```bash
-   pip install \
-     torch==2.2.0+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
-     torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cu121.html \
-     torch-sparse  -f https://data.pyg.org/whl/torch-2.2.0+cu121.html \
-     torch-geometric==2.4.0 \
-     mediapipe opencv-python matplotlib numpy tqdm
-   ```
-
-> **Note:** For flat Z=0 plotting only, PyTorch & PyG are optional.
-
----
-
-## 🏋️‍♂️ Training
-
-```bash
+🏋️‍♂️ Training
+bash
+Copy
+Edit
 python train.py \
   --data mpi_inf_combined.npz \
   --bs 128 \
   --epochs 150 \
   --lr 0.002 \
   --patience 10
-```
+Loss: MPJPE + 0.01× bone-length regularization
 
-* Uses **MPJPE + 0.01× bone\_length\_loss**, ReduceLROnPlateau (factor 0.5, patience 5), early stop (10 epochs)
-* Saves `best_model_weights.pth` on val improvement
+Scheduler: ReduceLROnPlateau(factor=0.5, patience=5)
 
----
+Early stopping: 10 epochs without val improvement
 
-## 📊 Evaluation
+Output: saves best_model_weights.pth
 
-Compute final MPJPE on held-out 10%:
-
-```bash
+📊 Evaluation
+bash
+Copy
+Edit
 python eval.py --data mpi_inf_combined.npz --bs 64
-```
+Final Val MPJPE should be ≈ 50 mm on held-out 10%.
 
-Expect a **final val MPJPE ≈ 50 mm**.
+🖼️ Inference & 2D Visualizations
+1. Plain 2D overlay
+bash
+Copy
+Edit
+python overlay_2d.py input.jpg -o overlay_2d.jpg
+2. Visibility‐masked overlay
+bash
+Copy
+Edit
+python overlay_with_masks.py input.jpg --output overlay_masks.jpg
+3. Semantic MediaPipe names
+bash
+Copy
+Edit
+python overlay_2d_named.py input.jpg --output overlay_named.jpg
+4. Distinct‐color + legend
+bash
+Copy
+Edit
+python overlay_2d_colored_legend.py input.jpg --output overlay_colored_legend.jpg
+5. Body‐part grouping
+bash
+Copy
+Edit
+python overlay_2d_grouped.py input.jpg --output overlay_grouped.jpg
+6. Grouped + missing‐bone fill
+bash
+Copy
+Edit
+python overlay_2d_grouped_filled.py input.jpg --output overlay_filled.jpg
+🖥️ Single-Image 3D Inference
+bash
+Copy
+Edit
+python infer.py input.jpg --weights best_model_weights.pth
+Outputs:
 
----
+2D overlay (overlay_coco17.jpg)
 
-## 🖼️ Inference & Visualization
+Upright 3D skeleton plot
 
-### Single-Image Inference
-
-```bash
-python infer.py path/to/image.jpg --weights best_model_weights.pth
-```
-
-* Saves `overlay_coco17.jpg` (2D COCO-17 overlay) and displays 3D plot
-
-### Qualitative Val Plots
-
-```bash
-python visualize_eval.py
-```
-
-* Displays 2D overlays and 3D skeletons for 5 val samples
-
----
-
-## 🚀 Model Export
-
-Trace to TorchScript for deployment:
-
-```bash
+🚀 Model Export
+bash
+Copy
+Edit
 python export_model.py
-```
+Produces pose_estimator.ts (TorchScript) for mobile/edge deployment.
 
-Produces `pose_estimator.ts`.
-
----
-
-## ✍️ Citation
-
+✍️ Citation
 If you use this work, please cite:
 
-> Vedansh Tembhre, 2025. "Hybrid Sparse Graph and Transformer Architecture for Real-Time 3D Human Pose Estimation."
+Vedansh Tembhre, 2025.
+“Hybrid Sparse Graph and Transformer Architecture for Real-Time 3D Human Pose Estimation.”
