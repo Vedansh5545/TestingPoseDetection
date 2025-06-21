@@ -1,0 +1,7 @@
+Semantic Bone Labeling: map each edge → name, annotate your overlays.
+
+Visibility Masks: produce boolean masks for visible joints & bones.
+
+Missing-Bone Inference: simple symmetry‐based fill for occlusions.
+
+Graph Completion: combine mask + fill into a robust 2D input for your GCN.

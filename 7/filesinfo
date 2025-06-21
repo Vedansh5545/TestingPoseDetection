@@ -1,0 +1,113 @@
+📦 mpi_inf_combined.npz
+A single file that bundles your entire MPI-INF-3DHP dataset. Inside you’ve got:
+
+pose2d: all the 2D keypoints (N samples × 28 joints × x,y,confidence)
+
+pose3d: the ground-truth 3D coordinates (N samples × 28 joints × x,y,z)
+
+You feed this into data_loader.py.
+
+🗃️ data_loader.py
+Turns that .npz file into a PyTorch “Dataset.” It:
+
+Loads the 2D and 3D arrays
+
+Ensures every 2D point has a “confidence” value
+
+Normalizes the 2D data (subtract mean, divide by std)
+
+Saves those mean/std numbers to pose2d_mean_std.npy
+
+Lets you grab samples by index (so the trainer and evaluator can loop over them)
+
+🧱 skeleton_utils.py
+Defines your human skeleton’s “wiring diagram” and the landmark→joint map:
+
+MPIINF_EDGES: the list of bone-connections (pairs of joint indices) you trained on
+
+MEDIAPIPE_TO_MPIINF: which MediaPipe landmark goes to which of your 28 joints
+
+This keeps everyone (training, inference, visualization) using the same skeleton.
+
+🤖 model.py
+Builds your neural network:
+
+Sparse GCN blocks – learn local bone relationships
+
+Transformer layers – learn global pose patterns across all joints
+
+A small “head” MLP → outputs a 3D (x,y,z) for each joint
+
+Also includes create_edge_index() so you never hand-type the edge list twice
+
+🏋️‍♂️ train.py
+The training script:
+
+Loads data via data_loader.py
+
+Splits 90% train / 10% val
+
+Builds your PoseEstimator model and the edge-index tensor
+
+Uses MPJPE (average joint-to-joint distance) + 0.01×bone-length loss
+
+Scheduler that halves LR when val-MPJPE plateaus, and early-stops after 10 “bad” epochs
+
+Always saves the best model weights to best_model_weights.pth
+
+📊 eval.py
+A quick way to get your final number on the held-out 10%:
+
+Re-loads the same normalized dataset
+
+Loads best_model_weights.pth
+
+Runs through all val samples in batches
+
+Prints the Final Val MPJPE in millimeters (should be around ~50 mm)
+
+📸 infer.py
+Turn a single input image into both 2D and 3D results:
+
+Runs MediaPipe to get 2D keypoints
+
+Draws a COCO-17 style 2D overlay (overlay_coco17.jpg)
+
+Feeds the normalized 2D into your model → gets 3D joints
+
+Plots that 3D skeleton in a matplotlib window
+
+🎨 visualize.py
+Reusable drawing functions:
+
+draw_2d_pose_28(): overlays your 28-joint skeleton on an image
+
+draw_coco17(): overlays the 17-joint COCO subset (used by infer.py)
+
+plot_3d(): simple 3D skeleton plot from a (J×3) array
+
+🔍 visualize_eval.py
+For sanity-checking on the validation set:
+
+Picks the first 5 val samples
+
+Shows a blank 2D image with your 28-joint overlay
+
+Shows the corresponding 3D skeleton prediction
+
+Lets you eyeball if any limbs are flipped or out of place
+
+🚀 export_model.py
+Prepares your model for deployment:
+
+Creates a dummy (1,28,3) input and the edge-index
+
+Traces your PoseEstimator into a TorchScript module
+
+Saves it as pose_estimator.ts for super-fast loading in C++ or mobile
+
+🔧 Support files
+pose2d_mean_std.npy: the mean & std your loader saved—used to normalize new data
+
+best_model_weights.pth: the checkpoint with the lowest validation MPJPE
+
