@@ -1,0 +1,79 @@
+Depth (“Z”) is by far the hardest part, because a single 2D skeleton has lost all direct distance information. Here are the simplest tricks and next-level ideas you can try—no heavy new models required, but these will give your current lifter real depth cues:
+
+---
+
+## 1. **Normalize your 2D to “real-world” coords**
+
+Right now you feed raw pixel X,Y (0…W / 0…H) into the GCN.  The network then has to learn the camera projection rules from scratch.  Instead:
+
+1. Subtract the image center $(c_x,c_y)$ so 0,0 is the camera principal point.
+2. Divide by the focal length $f$ (in pixels):
+
+   $$
+     x_\text{norm} = \frac{u - c_x}{f},\quad
+     y_\text{norm} = \frac{v - c_y}{f}.
+   $$
+
+   These normalized coordinates are proportional to real -space $X/Z,\;Y/Z$.
+3. Feed $(x_\text{norm},y_\text{norm})$ into your lifter instead of raw pixels.
+
+That way the network “understands” that if a point is closer, its normalized $x,y$ are larger for a given real-world shift.  You’ll see much better Z predictions once you incorporate camera intrinsics.
+
+---
+
+## 2. **Bone-length consistency loss**
+
+Add a small penalty that forces each predicted bone to match its average length from your training data.  E.g.
+
+$$
+  L_{\text{bone}} = \sum_{(i,j)\in\mathrm{edges}} \bigl(\,\|p_i - p_j\|_2 - \bar{d}_{ij}\bigr)^2
+$$
+
+This “teaches” the network valid depth ranges—if it collapses everyone onto a flat plane, the bone-length loss will push Z apart.
+
+---
+
+## 3. **Depth-weighted loss**
+
+If you find your network still underfits Z, explicitly weight Z-error more in your MPJPE:
+
+$$
+  L = \frac1N\sum_{k=1}^N \bigl[(x_k-\hat x_k)^2 + (y_k-\hat y_k)^2 + \alpha\,(z_k-\hat z_k)^2\bigr]
+$$
+
+Try $\alpha=2$ or 5 so the model cares more about getting depth right.
+
+---
+
+## 4. **Add simple image cues**
+
+2D keypoints alone sometimes can’t resolve front/back ambiguity.  You can augment your lifter input with a small *patch* of image around each joint (e.g. a 16×16 crop flattened to a vector).  Now the network can see shading and perspective cues that hint at depth.
+
+---
+
+## 5. **Temporal smoothing (for video)**
+
+If you’re lifting from a stream, enforce that depth changes smoothly over time:
+
+$$
+  L_{\text{temp}} = \sum_t \|\,\hat z_t-\hat z_{t-1}\|_2^2.
+$$
+
+This drastically reduces jitter and usually improves average depth accuracy.
+
+---
+
+### **Putting it into practice**
+
+1. **Compute or look up** your camera’s $f, c_x, c_y$.
+2. **Modify your preprocessing** in `detect_and_lift.py` (or `infer.py`) to convert pixel → normalized coordinates before you standardize/normalize as before.
+3. **In `train.py`**, add one extra term to your loss:
+
+   ```python
+   # after your MPJPE loss:
+   bone_loss = bone_length_weight * compute_bone_length_loss(pred3d, edge_index, avg_bone_lengths)
+   loss = mpjpe + bone_loss
+   ```
+4. **Retrain** for a few epochs.  You should see Z-error drop dramatically.
+
+Taken together, these steps give your existing Sparse-GCN+Transformer just the right geometric hints to “lift” into true 3D more accurately—without scrapping your model or data.
